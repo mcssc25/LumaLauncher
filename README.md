@@ -7,10 +7,11 @@ Luma is a customizable, favorites-first launcher for Android TV and Google TV.
 - Favorites are the first app row. Hold the remote's **OK** button on any app to add or remove it.
 - Installed TV apps are found automatically.
 - Four built-in backgrounds plus a photo picker for your own wallpaper.
-- Mix-and-match app-card surfaces, shapes, background shades, colors, and sizes.
+- Mix-and-match app-card surfaces, shapes, background shades, colors, and sizes, with a live preview inside Customize.
+- A **Card names** switch lets you show or hide the app name beneath every card. Icons automatically grow when names are hidden.
 - Clean Large, Raised, Sticker, Neon, and Color Bubble icon treatments with live previews.
 - Compatible installed Android icon-pack support through each pack's standard app filter.
-- Full replacement artwork for Nuvio, 8K/TiviMate, MLB, Netflix, Prime Video, YouTube, Downloader, and Google Play Store, plus a photo picker for replacing any favorite app's actual icon.
+- Full replacement artwork for Nuvio, 8K/TiviMate, MLB, Netflix, Prime Video, YouTube, Downloader, Google Play Store, Hulu, Internet Speed Test, Play Games, Play Movies & TV, Surfshark, Stremio, YouTube TV, and Spotify, plus a photo picker for replacing any favorite app's actual icon.
 - Automatic approximate local weather, city presets, and a clickable seven-day forecast.
 - Live Wi-Fi/Ethernet/VPN status and local tunnel address.
 - A now-playing widget with album art and play/pause control.
@@ -41,6 +42,10 @@ If the Google TV device ignores that Home choice, open **Customize > Android TV 
 ## Updates
 
 Luma checks the public GitHub release automatically every six hours while it is running. When a newer version exists, an **Update** button appears in the top-right corner. You can also use **Customize > App updates > Download newest version** at any time. Android still shows an installation approval screen for each APK update unless the TV is specially managed or rooted.
+
+## Customize app cards
+
+Open **Customize > App cards**. The controls and a sample card appear together, so changes to card names, surface, shape, shade, color, and size can be seen immediately without returning to the Home screen.
 
 ## Preview it on this PC
 

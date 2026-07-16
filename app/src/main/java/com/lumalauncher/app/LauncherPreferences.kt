@@ -41,6 +41,9 @@ class LauncherPreferences(context: Context) {
     )
         private set
 
+    var showCardNames by mutableStateOf(prefs.getBoolean("show_card_names", true))
+        private set
+
     var iconStyle by mutableStateOf(
         enumValueOrDefault(prefs.getString("icon_style", null), IconStyle.CLEAN),
     )
@@ -113,6 +116,11 @@ class LauncherPreferences(context: Context) {
     fun updateCardColor(color: CardColor) {
         cardColor = color
         prefs.edit().putString("card_color", color.name).apply()
+    }
+
+    fun updateShowCardNames(enabled: Boolean) {
+        showCardNames = enabled
+        prefs.edit().putBoolean("show_card_names", enabled).apply()
     }
 
     fun updateIconStyle(style: IconStyle) {

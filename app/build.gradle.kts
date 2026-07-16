@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,8 @@ android {
         applicationId = "com.lumalauncher.app"
         minSdk = 23
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -23,10 +25,42 @@ android {
         buildConfig = true
     }
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("sideload") {
+            dimension = "distribution"
+            buildConfigField("boolean", "IS_PLAY_STORE_BUILD", "false")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "IS_PLAY_STORE_BUILD", "true")
+        }
+    }
+
+    val uploadPropertiesFile = rootProject.file("keystore.properties")
+    val uploadProperties = Properties().apply {
+        if (uploadPropertiesFile.exists()) {
+            uploadPropertiesFile.inputStream().use(::load)
+        }
+    }
+    val uploadSigningConfig = if (uploadPropertiesFile.exists()) {
+        signingConfigs.create("upload") {
+            storeFile = rootProject.file(uploadProperties.getProperty("storeFile"))
+            storePassword = uploadProperties.getProperty("storePassword")
+            keyAlias = uploadProperties.getProperty("keyAlias")
+            keyPassword = uploadProperties.getProperty("keyPassword")
+        }
+    } else {
+        null
+    }
+
+    productFlavors.getByName("play").signingConfig =
+        uploadSigningConfig ?: signingConfigs.getByName("debug")
+
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

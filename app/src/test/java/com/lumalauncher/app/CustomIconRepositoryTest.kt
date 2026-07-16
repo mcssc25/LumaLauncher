@@ -39,6 +39,35 @@ class CustomIconRepositoryTest {
             R.drawable.custom_icon_play_store,
             CustomIconRepository.bundledResourceFor("Google Play Store", "com.android.vending"),
         )
-        assertNull(CustomIconRepository.bundledResourceFor("Spotify", "com.spotify.tv.android"))
+        assertEquals(R.drawable.custom_icon_hulu, CustomIconRepository.bundledResourceFor("Hulu", "com.hulu.livingroomplus"))
+        assertEquals(
+            R.drawable.custom_icon_speed_test,
+            CustomIconRepository.bundledResourceFor("Internet Speed Test", "com.rma.speedtesttv"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_play_games,
+            CustomIconRepository.bundledResourceFor("Play Games", "com.google.android.play.games"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_play_movies,
+            CustomIconRepository.bundledResourceFor("Play Movies & TV", "com.google.android.videos"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_surfshark,
+            CustomIconRepository.bundledResourceFor("Surfshark", "com.surfshark.vpnclient.android"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_stremio,
+            CustomIconRepository.bundledResourceFor("Stremio", "com.stremio.one"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_youtube_tv,
+            CustomIconRepository.bundledResourceFor("YouTube TV", "com.google.android.youtube.tvunplugged"),
+        )
+        assertEquals(
+            R.drawable.custom_icon_spotify,
+            CustomIconRepository.bundledResourceFor("Spotify", "com.spotify.tv.android"),
+        )
+        assertNull(CustomIconRepository.bundledResourceFor("Plex", "com.plexapp.android"))
     }
 }
