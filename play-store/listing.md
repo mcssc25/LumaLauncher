@@ -27,7 +27,8 @@ Features include:
 - Built-in and custom app icon artwork
 - Current weather and a seven-day forecast
 - Wi-Fi, Ethernet, and VPN connection status
-- A now-playing music widget with playback controls
+- A now-playing music widget with play/pause, next-song, and default-app controls
+- A long-press app menu for favorites, uninstalling, and favorite-bar movement
 - Simple remote navigation with clear focus effects
 - An optional Home screen helper for Google TV devices
 
@@ -35,8 +36,10 @@ Luma has no ads and does not require an account. Your favorites, artwork choices
 
 The optional Home screen helper uses Android Accessibility only to detect when the stock TV Home screen appears and return you to Luma. It cannot read screen content or typed text, and it does not collect or share Accessibility data.
 
-## Release notes - 0.3.0
+## Release notes - 0.4.0
 
+- Added a next-song music control and default music app setting
+- Added Favorite, Uninstall, and Move options when holding OK on an app
 - Added eight new 3D-style replacement app icons
 - Added a Card names on/off switch
 - Added a live card preview inside Customize

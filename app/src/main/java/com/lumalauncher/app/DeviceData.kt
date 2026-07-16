@@ -3,6 +3,7 @@ package com.lumalauncher.app
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -10,6 +11,7 @@ import android.media.session.PlaybackState
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.provider.Settings
+import android.view.KeyEvent
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -192,11 +194,9 @@ object MusicReader {
     fun read(context: Context): NowPlaying? {
         if (!hasAccess(context)) return null
         return runCatching {
-            val controller = activeControllers(context)
-                .firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-                ?: activeControllers(context).firstOrNull()
-                ?: return null
+            val controller = preferredController(context) ?: return null
             val metadata = controller.metadata
+            val playbackState = controller.playbackState
             val title = metadata?.string(MediaMetadata.METADATA_KEY_TITLE)
                 ?: metadata?.string(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
                 ?: "Nothing playing"
@@ -214,31 +214,75 @@ object MusicReader {
                 title = title,
                 artist = artist,
                 appName = appName,
-                isPlaying = controller.playbackState?.state == PlaybackState.STATE_PLAYING,
+                isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING,
+                canSkipNext = playbackState?.actions?.and(PlaybackState.ACTION_SKIP_TO_NEXT) != 0L,
                 albumArt = artwork?.safeImageBitmap(),
             )
         }.getOrNull()
     }
 
-    fun togglePlayback(context: Context) {
-        if (!hasAccess(context)) return
-        runCatching {
-            val controller = activeControllers(context)
-                .firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-                ?: activeControllers(context).firstOrNull()
-                ?: return
+    fun togglePlayback(context: Context): Boolean {
+        if (!hasAccess(context)) return false
+        val controller = runCatching { preferredController(context) }.getOrNull() ?: return false
+        return runCatching {
             if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
                 controller.transportControls.pause()
             } else {
                 controller.transportControls.play()
             }
-        }
+            true
+        }.getOrDefault(false)
+    }
+
+    fun play(context: Context, preferredPackageName: String? = null): Boolean {
+        if (!hasAccess(context)) return false
+        val controller = runCatching {
+            preferredController(context, preferredPackageName)
+        }.getOrNull() ?: return false
+        val controllerAccepted = runCatching {
+            controller.transportControls.play()
+            true
+        }.getOrDefault(false)
+        val mediaKeyAccepted = runCatching {
+            val audioManager = context.getSystemService(AudioManager::class.java)
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+            true
+        }.getOrDefault(false)
+        return controllerAccepted || mediaKeyAccepted
+    }
+
+    fun isPlaying(context: Context, preferredPackageName: String? = null): Boolean {
+        if (!hasAccess(context)) return false
+        return runCatching {
+            preferredController(context, preferredPackageName)?.playbackState?.state == PlaybackState.STATE_PLAYING
+        }.getOrDefault(false)
+    }
+
+    fun skipToNext(context: Context): Boolean {
+        if (!hasAccess(context)) return false
+        val controller = runCatching { preferredController(context) }.getOrNull() ?: return false
+        return runCatching {
+            controller.transportControls.skipToNext()
+            true
+        }.getOrDefault(false)
     }
 
     private fun activeControllers(context: Context): List<MediaController> {
         val manager = context.getSystemService(MediaSessionManager::class.java)
         val listener = ComponentName(context, MusicNotificationListener::class.java)
         return manager.getActiveSessions(listener)
+    }
+
+    private fun preferredController(
+        context: Context,
+        preferredPackageName: String? = null,
+    ): MediaController? {
+        val controllers = activeControllers(context)
+        return preferredPackageName?.let { packageName ->
+            controllers.firstOrNull { it.packageName == packageName }
+        } ?: controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        ?: controllers.firstOrNull()
     }
 
     private fun MediaMetadata.string(key: String): String? = getString(key)?.takeIf(String::isNotBlank)

@@ -57,6 +57,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Image as ImageIcon
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.NetworkCheck
@@ -65,7 +66,9 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.runtime.Composable
@@ -74,6 +77,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +88,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -103,6 +108,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -124,6 +130,7 @@ class MainActivity : ComponentActivity() {
                 LumaLauncher()
             }
         }
+
     }
 }
 
@@ -133,13 +140,29 @@ private fun LumaLauncher() {
     val preferences = remember { LauncherPreferences(context) }
     var showSettings by remember { mutableStateOf(false) }
     var showForecast by remember { mutableStateOf(false) }
+    var appRefreshToken by remember { mutableStateOf(0) }
+    val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        appRefreshToken += 1
+    }
     val customIconUris = preferences.customIconUris.toMap()
-    val apps by produceState<List<TvApp>>(emptyList(), preferences.iconPackPackage, customIconUris) {
+    val apps by produceState<List<TvApp>>(
+        emptyList(),
+        preferences.iconPackPackage,
+        customIconUris,
+        appRefreshToken,
+    ) {
         val discovered = AppRepository.loadLaunchableApps(context)
         val themed = preferences.iconPackPackage?.let { iconPack ->
             IconPackRepository.apply(context, discovered, iconPack)
         } ?: discovered
         value = CustomIconRepository.apply(context, themed, customIconUris)
+    }
+    LaunchedEffect(apps, preferences.defaultMusicPackage) {
+        if (preferences.defaultMusicPackage == null) {
+            AppRepository.likelyMusicApps(apps)
+                .firstOrNull { it.packageName.contains("spotify", ignoreCase = true) }
+                ?.let { preferences.updateDefaultMusicApp(it.packageName) }
+        }
     }
     val updateInfo by produceState<UpdateInfo?>(null) {
         if (!BuildConfig.IS_PLAY_STORE_BUILD) {
@@ -171,6 +194,11 @@ private fun LumaLauncher() {
                 onSettings = { showSettings = true },
                 onAndroidSettings = { openAndroidSettings(context) },
                 onWeather = { showForecast = true },
+                onUninstall = { app ->
+                    uninstallLauncher.launch(
+                        Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")),
+                    )
+                },
                 updateInfo = updateInfo,
                 onUpdate = {
                     if (BuildConfig.IS_PLAY_STORE_BUILD) openPlayStorePage(context)
@@ -271,15 +299,22 @@ private fun HomeContent(
     onSettings: () -> Unit,
     onAndroidSettings: () -> Unit,
     onWeather: () -> Unit,
+    onUninstall: (TvApp) -> Unit,
     updateInfo: UpdateInfo?,
     onUpdate: () -> Unit,
 ) {
     val context = LocalContext.current
+    var actionApp by remember { mutableStateOf<TvApp?>(null) }
+    var moveApp by remember { mutableStateOf<TvApp?>(null) }
     val favorites = preferences.favoritePackages.mapNotNull { packageName ->
         apps.firstOrNull { it.packageName == packageName }
     }
+    BackHandler(enabled = actionApp != null || moveApp != null) {
+        if (moveApp != null) moveApp = null else actionApp = null
+    }
 
-    LazyColumn(
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = 58.dp,
@@ -288,11 +323,11 @@ private fun HomeContent(
             bottom = 48.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item { LauncherHeader(onSettings, onAndroidSettings, updateInfo, onUpdate) }
-        item { WidgetRow(preferences, onWeather) }
+        ) {
+            item { LauncherHeader(onSettings, onAndroidSettings, updateInfo, onUpdate) }
+            item { WidgetRow(apps, preferences, onWeather, onSettings) }
         item {
-            SectionTitle(icon = Icons.Rounded.Star, title = "Favorites", hint = "Hold OK to add or remove")
+            SectionTitle(icon = Icons.Rounded.Star, title = "Favorites", hint = "Hold OK for app options")
         }
         item {
             if (favorites.isEmpty()) {
@@ -307,18 +342,15 @@ private fun HomeContent(
                             app = app,
                             preferences = preferences,
                             onClick = { AppRepository.launch(context, app) },
-                            onLongClick = {
-                                preferences.toggleFavorite(app.packageName)
-                                Toast.makeText(context, "Removed ${app.label} from favorites", Toast.LENGTH_SHORT).show()
-                            },
-                            requestInitialFocus = index == 0,
+                            onLongClick = { actionApp = app },
+                            requestInitialFocus = index == 0 && actionApp == null && moveApp == null,
                         )
                     }
                 }
             }
         }
         item {
-            SectionTitle(icon = Icons.Rounded.Apps, title = "All apps", hint = "Your installed TV apps")
+            SectionTitle(icon = Icons.Rounded.Apps, title = "All apps", hint = "Hold OK for app options")
         }
         item {
             if (apps.isEmpty()) {
@@ -341,20 +373,49 @@ private fun HomeContent(
                             preferences = preferences,
                             favorite = isFavorite,
                             onClick = { AppRepository.launch(context, app) },
-                            onLongClick = {
-                                preferences.toggleFavorite(app.packageName)
-                                val message = if (isFavorite) {
-                                    "Removed ${app.label} from favorites"
-                                } else {
-                                    "Added ${app.label} to favorites"
-                                }
-                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                            },
-                            requestInitialFocus = favorites.isEmpty() && index == 0,
+                            onLongClick = { actionApp = app },
+                            requestInitialFocus = favorites.isEmpty() && index == 0 && actionApp == null && moveApp == null,
                         )
                     }
                 }
             }
+        }
+    }
+
+        moveApp?.let { app ->
+            MoveFavoriteMenu(
+                app = app,
+                favoriteIndex = preferences.favoritePackages.indexOf(app.packageName),
+                favoriteCount = preferences.favoritePackages.size,
+                onMoveLeft = { preferences.moveFavorite(app.packageName, -1) },
+                onMoveRight = { preferences.moveFavorite(app.packageName, 1) },
+                onClose = { moveApp = null },
+            )
+        } ?: actionApp?.let { app ->
+            val isFavorite = preferences.favoritePackages.contains(app.packageName)
+            AppActionMenu(
+                app = app,
+                isFavorite = isFavorite,
+                onFavorite = {
+                    preferences.toggleFavorite(app.packageName)
+                    val message = if (isFavorite) {
+                        "Removed ${app.label} from favorites"
+                    } else {
+                        "Added ${app.label} to favorites"
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    actionApp = null
+                },
+                onUninstall = {
+                    actionApp = null
+                    onUninstall(app)
+                },
+                onMove = {
+                    actionApp = null
+                    moveApp = app
+                },
+                onClose = { actionApp = null },
+            )
         }
     }
 }
@@ -453,14 +514,24 @@ private fun openPlayStorePage(context: Context) {
 }
 
 @Composable
-private fun WidgetRow(preferences: LauncherPreferences, onWeather: () -> Unit) {
+private fun WidgetRow(
+    apps: List<TvApp>,
+    preferences: LauncherPreferences,
+    onWeather: () -> Unit,
+    onChooseMusicApp: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().height(126.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         WeatherWidget(preferences, onWeather, Modifier.weight(0.92f).fillMaxHeight())
         NetworkWidget(Modifier.weight(0.86f).fillMaxHeight())
-        MusicWidget(Modifier.weight(1.35f).fillMaxHeight())
+        MusicWidget(
+            apps = apps,
+            preferences = preferences,
+            onChooseMusicApp = onChooseMusicApp,
+            modifier = Modifier.weight(1.35f).fillMaxHeight(),
+        )
     }
 }
 
@@ -550,9 +621,19 @@ private fun NetworkWidget(modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MusicWidget(modifier: Modifier = Modifier) {
+private fun MusicWidget(
+    apps: List<TvApp>,
+    preferences: LauncherPreferences,
+    onChooseMusicApp: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val musicBodyFocusRequester = remember { FocusRequester() }
+    val playFocusRequester = remember { FocusRequester() }
+    val nextFocusRequester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
+    val defaultMusicApp = apps.firstOrNull { it.packageName == preferences.defaultMusicPackage }
     val access by produceState(MusicReader.hasAccess(context)) {
         while (true) {
             value = MusicReader.hasAccess(context)
@@ -567,12 +648,30 @@ private fun MusicWidget(modifier: Modifier = Modifier) {
     }
     val border by animateColorAsState(if (focused) Color(0xFF9CD7FF) else Color.White.copy(alpha = 0.12f))
     val scale by animateFloatAsState(if (focused) 1.025f else 1f)
-    val action = {
-        if (access) {
-            MusicReader.togglePlayback(context)
+
+    val openDefaultMusic = {
+        if (defaultMusicApp == null) {
+            Toast.makeText(context, "Choose a default music app in Customize", Toast.LENGTH_LONG).show()
+            onChooseMusicApp()
         } else {
-            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            AppRepository.launch(context, defaultMusicApp)
+            scope.launch {
+                repeat(8) {
+                    delay(800)
+                    MusicReader.play(context, defaultMusicApp.packageName)
+                    delay(200)
+                    if (MusicReader.isPlaying(context, defaultMusicApp.packageName)) return@launch
+                }
+            }
         }
+    }
+    val playAction = {
+        when {
+            !access -> context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            nowPlaying != null -> MusicReader.togglePlayback(context)
+            else -> openDefaultMusic()
+        }
+        Unit
     }
 
     Row(
@@ -581,67 +680,138 @@ private fun MusicWidget(modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(22.dp))
             .background(Color(0x71111A29))
             .border(if (focused) 2.dp else 1.dp, border, RoundedCornerShape(22.dp))
-            .onFocusChanged { focused = it.isFocused }
-            .combinedClickable(onClick = action, onLongClick = action)
-            .focusable()
-            .padding(17.dp),
+            .padding(13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .size(80.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF25344A)),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(musicBodyFocusRequester)
+                .focusProperties { right = playFocusRequester }
+                .onFocusChanged { focused = it.isFocused }
+                .combinedClickable(onClick = playAction, onLongClick = playAction)
+                .focusable()
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (nowPlaying?.albumArt != null) {
-                Image(
-                    bitmap = nowPlaying!!.albumArt!!,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+            Box(
+                Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(Color(0xFF25344A)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (nowPlaying?.albumArt != null) {
+                    Image(
+                        bitmap = nowPlaying!!.albumArt!!,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    LumaIcon(Icons.Rounded.MusicNote, "Music", Color(0xFFC7A7FF), 32.dp)
+                }
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = when {
+                        !access -> "Enable music widget"
+                        nowPlaying == null -> "Nothing playing"
+                        else -> nowPlaying!!.title
+                    },
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            } else {
-                LumaIcon(Icons.Rounded.MusicNote, "Music", Color(0xFFC7A7FF), 34.dp)
+                Text(
+                    text = when {
+                        !access -> "Press OK to allow access"
+                        nowPlaying == null && defaultMusicApp == null -> "Choose a default in Customize"
+                        nowPlaying == null -> "Press play to open ${defaultMusicApp!!.label}"
+                        else -> nowPlaying!!.artist
+                    },
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = nowPlaying?.appName ?: defaultMusicApp?.label ?: "Music",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
             }
         }
-        Spacer(Modifier.width(15.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = when {
-                    !access -> "Enable music widget"
-                    nowPlaying == null -> "Nothing playing"
-                    else -> nowPlaying!!.title
-                },
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = when {
-                    !access -> "Press OK to allow access"
-                    nowPlaying == null -> "Start music in any app"
-                    else -> nowPlaying!!.artist
-                },
-                color = Color.White.copy(alpha = 0.6f),
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = nowPlaying?.appName ?: "Music",
-                color = Color.White.copy(alpha = 0.4f),
-                fontSize = 11.sp,
-                maxLines = 1,
-            )
-        }
-        LumaIcon(
+        Spacer(Modifier.width(8.dp))
+        MusicControlButton(
             image = if (nowPlaying?.isPlaying == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
             description = "Play or pause",
-            tint = Color.White,
-            size = 29.dp,
+            enabled = true,
+            focusRequester = playFocusRequester,
+            leftFocusRequester = musicBodyFocusRequester,
+            rightFocusRequester = nextFocusRequester,
+            onClick = playAction,
+        )
+        Spacer(Modifier.width(7.dp))
+        MusicControlButton(
+            image = Icons.Rounded.SkipNext,
+            description = "Next song",
+            enabled = access && nowPlaying != null,
+            focusRequester = nextFocusRequester,
+            leftFocusRequester = playFocusRequester,
+            onClick = { MusicReader.skipToNext(context) },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MusicControlButton(
+    image: ImageVector,
+    description: String,
+    enabled: Boolean,
+    focusRequester: FocusRequester,
+    leftFocusRequester: FocusRequester? = null,
+    rightFocusRequester: FocusRequester? = null,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    var buttonModifier = Modifier
+        .size(44.dp)
+        .clip(CircleShape)
+        .background(
+            when {
+                focused -> Color(0xFFEAF8FF)
+                enabled -> Color.White.copy(alpha = 0.10f)
+                else -> Color.White.copy(alpha = 0.035f)
+            },
+        )
+        .border(
+            if (focused) 2.dp else 1.dp,
+            if (focused) Color.White else Color.White.copy(alpha = 0.12f),
+            CircleShape,
+        )
+    if (enabled) {
+        buttonModifier = buttonModifier
+            .focusRequester(focusRequester)
+            .focusProperties {
+                leftFocusRequester?.let { left = it }
+                rightFocusRequester?.let { right = it }
+            }
+            .onFocusChanged { focused = it.isFocused }
+            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .focusable()
+    }
+    Box(buttonModifier, contentAlignment = Alignment.Center) {
+        LumaIcon(
+            image = image,
+            description = description,
+            tint = if (focused) Color(0xFF07121F) else Color.White.copy(alpha = if (enabled) 1f else 0.25f),
+            size = 26.dp,
         )
     }
 }
@@ -832,7 +1002,7 @@ private fun EmptyFavorites() {
         Column {
             Text("Your favorite bar is ready", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
             Text(
-                "Move to any app below, then hold the OK button to add it here.",
+                "Move to any app below, hold OK, then choose Add favorite.",
                 color = Color.White.copy(alpha = 0.58f),
                 fontSize = 13.sp,
             )
@@ -1146,6 +1316,7 @@ private fun SettingsScreen(
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
+    val musicApps = remember(apps) { AppRepository.likelyMusicApps(apps) }
     val installedIconPacks by produceState<List<IconPackInfo>>(emptyList()) {
         value = IconPackRepository.discover(context)
     }
@@ -1277,6 +1448,45 @@ private fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            SettingSection(
+                "Music widget",
+                "Choose the app Luma opens and tries to resume when nothing is already playing.",
+            ) {
+                ChoiceRow {
+                    SettingChoice(
+                        label = "No default",
+                        selected = preferences.defaultMusicPackage == null,
+                    ) {
+                        preferences.updateDefaultMusicApp(null)
+                    }
+                    musicApps.forEach { app ->
+                        SettingChoice(
+                            label = app.label,
+                            selected = preferences.defaultMusicPackage == app.packageName,
+                            preview = {
+                                Image(
+                                    bitmap = app.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)),
+                                )
+                            },
+                        ) {
+                            preferences.updateDefaultMusicApp(app.packageName)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (musicApps.isEmpty()) {
+                        "No music apps were found. Install Spotify or another TV music app, then reopen Customize."
+                    } else {
+                        "Play opens the selected app; Next controls the active music queue."
+                    },
+                    color = Color.White.copy(alpha = 0.62f),
+                    fontSize = 13.sp,
+                )
             }
 
             SettingSection("Background", "Choose a built-in scene or use one of your photos.") {
@@ -1463,6 +1673,194 @@ private fun SettingsScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun AppActionMenu(
+    app: TvApp,
+    isFavorite: Boolean,
+    onFavorite: () -> Unit,
+    onUninstall: () -> Unit,
+    onMove: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color(0xE600050A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(820.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xFF142234))
+                .border(2.dp, Color(0xFF72D5FF), RoundedCornerShape(26.dp))
+                .padding(30.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    bitmap = app.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(15.dp)),
+                )
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(app.label, color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                    Text("App options", color = Color.White.copy(alpha = 0.58f), fontSize = 14.sp)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                MenuActionButton(
+                    label = if (isFavorite) "Remove favorite" else "Add favorite",
+                    icon = Icons.Rounded.Star,
+                    enabled = true,
+                    requestInitialFocus = true,
+                    onClick = onFavorite,
+                )
+                MenuActionButton(
+                    label = "Uninstall",
+                    icon = Icons.Rounded.Delete,
+                    enabled = true,
+                    onClick = onUninstall,
+                )
+                MenuActionButton(
+                    label = "Move",
+                    icon = Icons.Rounded.SwapHoriz,
+                    enabled = isFavorite,
+                    onClick = onMove,
+                )
+            }
+            Text(
+                if (isFavorite) {
+                    "Move changes this app's position in the favorite bar. Android will ask before uninstalling anything."
+                } else {
+                    "Add this app to favorites before moving it. Android will ask before uninstalling anything."
+                },
+                color = Color.White.copy(alpha = 0.62f),
+                fontSize = 14.sp,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FocusButton("Cancel", Icons.Rounded.Close, onClose)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoveFavoriteMenu(
+    app: TvApp,
+    favoriteIndex: Int,
+    favoriteCount: Int,
+    onMoveLeft: () -> Unit,
+    onMoveRight: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val canMoveLeft = favoriteIndex > 0
+    val canMoveRight = favoriteIndex in 0 until favoriteCount - 1
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color(0xE600050A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(700.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xFF142234))
+                .border(2.dp, Color(0xFF72D5FF), RoundedCornerShape(26.dp))
+                .padding(30.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Text("Move ${app.label}", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Favorite position ${favoriteIndex + 1} of $favoriteCount",
+                color = Color.White.copy(alpha = 0.62f),
+                fontSize = 15.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MenuActionButton(
+                    label = "Move left",
+                    icon = Icons.Rounded.ArrowBack,
+                    enabled = canMoveLeft,
+                    requestInitialFocus = canMoveLeft,
+                    onClick = onMoveLeft,
+                )
+                MenuActionButton(
+                    label = "Move right",
+                    icon = Icons.Rounded.ArrowForward,
+                    enabled = canMoveRight,
+                    requestInitialFocus = !canMoveLeft && canMoveRight,
+                    onClick = onMoveRight,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FocusButton(
+                    label = "Done",
+                    icon = Icons.Rounded.Check,
+                    onClick = onClose,
+                    requestInitialFocus = !canMoveLeft && !canMoveRight,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MenuActionButton(
+    label: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    requestInitialFocus: Boolean = false,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(requestInitialFocus, enabled) {
+        if (requestInitialFocus && enabled) {
+            delay(90)
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
+    var buttonModifier = Modifier
+        .width(235.dp)
+        .height(72.dp)
+        .clip(RoundedCornerShape(16.dp))
+        .background(
+            when {
+                focused -> Color(0xFFEAF8FF)
+                enabled -> Color(0xFF1D3045)
+                else -> Color(0xFF111B28)
+            },
+        )
+        .border(
+            if (focused) 2.dp else 1.dp,
+            if (focused) Color.White else Color.White.copy(alpha = if (enabled) 0.16f else 0.06f),
+            RoundedCornerShape(16.dp),
+        )
+    if (enabled) {
+        buttonModifier = buttonModifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .focusable()
+    }
+    Row(
+        modifier = buttonModifier.padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        val tint = when {
+            focused -> Color(0xFF07121F)
+            enabled -> Color.White
+            else -> Color.White.copy(alpha = 0.25f)
+        }
+        LumaIcon(icon, label, tint, 23.dp)
+        Spacer(Modifier.width(9.dp))
+        Text(label, color = tint, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
 

@@ -63,6 +63,9 @@ class LauncherPreferences(context: Context) {
     var useFahrenheit by mutableStateOf(prefs.getBoolean("weather_fahrenheit", true))
         private set
 
+    var defaultMusicPackage by mutableStateOf(prefs.getString("default_music_package", null))
+        private set
+
     val favoritePackages = mutableStateListOf<String>().apply {
         addAll(
             prefs.getString("favorites", "")
@@ -154,6 +157,14 @@ class LauncherPreferences(context: Context) {
     fun setFahrenheit(enabled: Boolean) {
         useFahrenheit = enabled
         prefs.edit().putBoolean("weather_fahrenheit", enabled).apply()
+    }
+
+    fun updateDefaultMusicApp(packageName: String?) {
+        defaultMusicPackage = packageName
+        prefs.edit().apply {
+            if (packageName == null) remove("default_music_package")
+            else putString("default_music_package", packageName)
+        }.apply()
     }
 
     fun toggleFavorite(packageName: String) {

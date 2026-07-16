@@ -14,7 +14,8 @@ Luma is a customizable, favorites-first launcher for Android TV and Google TV.
 - Full replacement artwork for Nuvio, 8K/TiviMate, MLB, Netflix, Prime Video, YouTube, Downloader, Google Play Store, Hulu, Internet Speed Test, Play Games, Play Movies & TV, Surfshark, Stremio, YouTube TV, and Spotify, plus a photo picker for replacing any favorite app's actual icon.
 - Automatic approximate local weather, city presets, and a clickable seven-day forecast.
 - Live Wi-Fi/Ethernet/VPN status and local tunnel address.
-- A now-playing widget with album art and play/pause control.
+- A now-playing widget with album art, separate play/pause and next-song controls, and a saved default music app.
+- Hold OK on any app for Favorite, Uninstall, and favorite-bar Move options.
 - A favorite editor for moving apps left or right.
 - Full TV remote focus states and landscape-friendly layout.
 
@@ -53,7 +54,9 @@ Double-click `Open Luma Preview.bat`. It opens a 1920x1080 Android emulator, ins
 
 ## Music widget permission
 
-Select the music widget and press **OK**. Android opens its notification-access screen. Turn on **Luma music widget**. This lets Luma read the active media title, artist, artwork, and play/pause state. It does not upload notification content.
+Select the music widget and press **OK**. Android opens its notification-access screen. Turn on **Luma music widget**. This lets Luma read the active media title, artist, artwork, playback state, and available media controls. It does not upload notification content.
+
+Choose **Customize > Music widget** to select Spotify or another installed TV music app. When nothing is playing, pressing Play opens that app and asks Android to resume its previous queue. If the app has no resumable queue, it opens normally so you can choose something to play.
 
 ## Open the source in Android Studio
 

@@ -51,6 +51,15 @@ object AppRepository {
             }
     }
 
+    fun likelyMusicApps(apps: List<TvApp>): List<TvApp> = apps.filter { app ->
+        isLikelyMusicApp(app.packageName, app.label)
+    }
+
+    internal fun isLikelyMusicApp(packageName: String, label: String): Boolean {
+        val searchable = "$packageName $label".lowercase(Locale.ROOT)
+        return MUSIC_APP_HINTS.any(searchable::contains)
+    }
+
     @Suppress("DEPRECATION")
     private fun queryActivities(packageManager: PackageManager, intent: Intent) =
         if (Build.VERSION.SDK_INT >= 33) {
@@ -71,4 +80,17 @@ object AppRepository {
             draw(canvas)
         }
     }
+
+    private val MUSIC_APP_HINTS = listOf(
+        "spotify",
+        "music",
+        "pandora",
+        "tidal",
+        "deezer",
+        "soundcloud",
+        "iheart",
+        "sirius",
+        "plexamp",
+        "radio",
+    )
 }
