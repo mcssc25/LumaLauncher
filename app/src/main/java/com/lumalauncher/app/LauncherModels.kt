@@ -134,5 +134,6 @@ data class NowPlaying(
     val artist: String,
     val appName: String,
     val isPlaying: Boolean,
+    val canSkipNext: Boolean,
     val albumArt: ImageBitmap? = null,
 )
