@@ -15,7 +15,8 @@ Luma is a customizable, favorites-first launcher for Android TV and Google TV.
 - Automatic approximate local weather, city presets, and a clickable seven-day forecast.
 - Live Wi-Fi/Ethernet/VPN status and local tunnel address.
 - A now-playing widget with album art, separate play/pause and next-song controls, and a saved default music app.
-- Hold OK on any app for Favorite, Uninstall, and favorite-bar Move options.
+- Hold OK on any app, then release when the menu appears, for Favorite, Uninstall, and favorite-bar Move options. The opening button release is ignored so it cannot accidentally choose the first action.
+- Uninstall always opens Android's own confirmation screen; Luma cannot silently remove an app.
 - A favorite editor for moving apps left or right.
 - Full TV remote focus states and landscape-friendly layout.
 

@@ -40,6 +40,8 @@ The optional Home screen helper uses Android Accessibility only to detect when t
 
 - Added a next-song music control and default music app setting
 - Added Favorite, Uninstall, and Move options when holding OK on an app
+- Prevented the opening OK-button release from accidentally selecting Favorite
+- Fixed Uninstall so Android's confirmation screen opens correctly
 - Added eight new 3D-style replacement app icons
 - Added a Card names on/off switch
 - Added a live card preview inside Customize

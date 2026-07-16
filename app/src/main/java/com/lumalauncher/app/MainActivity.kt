@@ -21,6 +21,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -98,6 +99,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -195,9 +202,20 @@ private fun LumaLauncher() {
                 onAndroidSettings = { openAndroidSettings(context) },
                 onWeather = { showForecast = true },
                 onUninstall = { app ->
-                    uninstallLauncher.launch(
-                        Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")),
-                    )
+                    val packageUri = Uri.parse("package:${app.packageName}")
+                    val uninstallIntent = Intent(Intent.ACTION_DELETE, packageUri).apply {
+                        putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                    }
+                    if (uninstallIntent.resolveActivity(context.packageManager) != null) {
+                        uninstallLauncher.launch(uninstallIntent)
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Android cannot uninstall this app directly. Opening its app settings instead.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
+                    }
                 },
                 updateInfo = updateInfo,
                 onUpdate = {
@@ -1685,8 +1703,37 @@ private fun AppActionMenu(
     onMove: () -> Unit,
     onClose: () -> Unit,
 ) {
+    var openingButtonReleased by remember { mutableStateOf(false) }
+    var openingButtonDownSeen by remember { mutableStateOf(false) }
+    val openingFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { openingFocusRequester.requestFocus() }
+        delay(600)
+        if (!openingButtonDownSeen) {
+            // Some remotes deliver the original key-up before the new menu can receive focus.
+            openingButtonReleased = true
+        }
+    }
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xE600050A)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xE600050A))
+            .focusRequester(openingFocusRequester)
+            .onPreviewKeyEvent { event ->
+                if (openingButtonReleased) {
+                    false
+                } else {
+                    val isAcceptKey = isTvAcceptKey(event.key)
+                    if (isAcceptKey && event.type == KeyEventType.KeyDown) {
+                        openingButtonDownSeen = true
+                    }
+                    if (isAcceptKey && event.type == KeyEventType.KeyUp) {
+                        openingButtonReleased = true
+                    }
+                    true
+                }
+            }
+            .focusable(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -1718,7 +1765,7 @@ private fun AppActionMenu(
                     label = if (isFavorite) "Remove favorite" else "Add favorite",
                     icon = Icons.Rounded.Star,
                     enabled = true,
-                    requestInitialFocus = true,
+                    requestInitialFocus = openingButtonReleased,
                     onClick = onFavorite,
                 )
                 MenuActionButton(
@@ -1845,7 +1892,15 @@ private fun MenuActionButton(
         buttonModifier = buttonModifier
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .onKeyEvent { event ->
+                if (isTvAcceptKey(event.key)) {
+                    if (event.type == KeyEventType.KeyUp) onClick()
+                    true
+                } else {
+                    false
+                }
+            }
+            .clickable(onClick = onClick)
             .focusable()
     }
     Row(
@@ -1863,6 +1918,9 @@ private fun MenuActionButton(
         Text(label, color = tint, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
+
+private fun isTvAcceptKey(key: Key): Boolean =
+    key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter
 
 @Composable
 private fun HomeHelperDisclosure(
