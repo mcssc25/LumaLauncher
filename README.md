@@ -27,7 +27,7 @@ https://github.com/mcssc25/LumaLauncher/releases/latest/download/Luma-Launcher.a
 
 Short TV address (forwards to the permanent link):
 
-https://mcssc25.github.io/LumaLauncher/
+https://mcssc25.github.io/
 
 1. On the TV, turn on **Developer options** and **USB debugging** or **Wireless debugging**.
 2. Copy the APK to the TV and open it, or use `install-to-tv.ps1` from a Windows computer.
