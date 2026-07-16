@@ -25,6 +25,10 @@ Permanent newest-version link:
 
 https://github.com/mcssc25/LumaLauncher/releases/latest/download/Luma-Launcher.apk
 
+Short TV address (forwards to the permanent link):
+
+https://mcssc25.github.io/LumaLauncher/
+
 1. On the TV, turn on **Developer options** and **USB debugging** or **Wireless debugging**.
 2. Copy the APK to the TV and open it, or use `install-to-tv.ps1` from a Windows computer.
 3. Press the TV remote's **Home** button.
