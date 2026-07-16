@@ -142,9 +142,11 @@ private fun LumaLauncher() {
         value = CustomIconRepository.apply(context, themed, customIconUris)
     }
     val updateInfo by produceState<UpdateInfo?>(null) {
-        while (true) {
-            value = UpdateRepository.latest(BuildConfig.VERSION_NAME).getOrNull()
-            delay(6 * 60 * 60 * 1_000L)
+        if (!BuildConfig.IS_PLAY_STORE_BUILD) {
+            while (true) {
+                value = UpdateRepository.latest(BuildConfig.VERSION_NAME).getOrNull()
+                delay(6 * 60 * 60 * 1_000L)
+            }
         }
     }
 
@@ -170,7 +172,10 @@ private fun LumaLauncher() {
                 onAndroidSettings = { openAndroidSettings(context) },
                 onWeather = { showForecast = true },
                 updateInfo = updateInfo,
-                onUpdate = { openWebUrl(context, updateInfo?.downloadUrl ?: UpdateRepository.STABLE_DOWNLOAD_URL) },
+                onUpdate = {
+                    if (BuildConfig.IS_PLAY_STORE_BUILD) openPlayStorePage(context)
+                    else openWebUrl(context, updateInfo?.downloadUrl ?: UpdateRepository.STABLE_DOWNLOAD_URL)
+                },
             )
         }
     }
@@ -436,6 +441,15 @@ private fun openWebUrl(context: Context, url: String) {
     if (!opened) {
         Toast.makeText(context, "No browser or Downloader app was found", Toast.LENGTH_LONG).show()
     }
+}
+
+private fun openPlayStorePage(context: Context) {
+    val marketUri = Uri.parse("market://details?id=${context.packageName}")
+    val webUri = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+    val opened = runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, marketUri))
+    }.isSuccess
+    if (!opened) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, webUri)) }
 }
 
 @Composable
@@ -843,11 +857,12 @@ private fun AppCard(
     onLongClick: () -> Unit,
     favorite: Boolean = true,
     requestInitialFocus: Boolean = false,
+    interactive: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) {
+    LaunchedEffect(requestInitialFocus, interactive) {
+        if (requestInitialFocus && interactive) {
             delay(120)
             runCatching { focusRequester.requestFocus() }
         }
@@ -886,23 +901,28 @@ private fun AppCard(
     }
     val borderColor = if (focused) Color(0xFFE1F6FF) else restingBorder
 
-    Column(
-        modifier = Modifier
-            .width(dimensions.width)
-            .height(dimensions.height)
-            .scale(scale)
-            .shadow(
-                if (preferences.cardStyle == CardStyle.GLOW && focused) 6.dp else 0.dp,
-                cardShape,
-            )
-            .clip(cardShape)
-            .background(background)
-            .border(if (focused) 3.dp else 1.dp, borderColor, cardShape)
+    var cardModifier = Modifier
+        .width(dimensions.width)
+        .height(dimensions.height)
+        .scale(scale)
+        .shadow(
+            if (preferences.cardStyle == CardStyle.GLOW && focused) 6.dp else 0.dp,
+            cardShape,
+        )
+        .clip(cardShape)
+        .background(background)
+        .border(if (focused) 3.dp else 1.dp, borderColor, cardShape)
+        .padding(horizontal = 12.dp, vertical = 10.dp)
+    if (interactive) {
+        cardModifier = cardModifier
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .focusable()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+    }
+
+    Column(
+        modifier = cardModifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -910,7 +930,7 @@ private fun AppCard(
             StyledAppIcon(
                 bitmap = app.icon,
                 style = if (app.isFromIconPack) IconStyle.CLEAN else preferences.iconStyle,
-                size = dimensions.icon,
+                size = if (preferences.showCardNames) dimensions.icon else dimensions.icon * 1.12f,
                 seed = app.packageName,
             )
             if (favorite) {
@@ -926,14 +946,58 @@ private fun AppCard(
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        if (preferences.showCardNames) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = app.label,
+                color = Color.White,
+                fontSize = if (preferences.cardSize == CardSize.COMPACT) 12.sp else 14.sp,
+                fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppCardSettingsPreview(
+    app: TvApp,
+    preferences: LauncherPreferences,
+) {
+    Column(
+        modifier = Modifier
+            .width(330.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.24f))
+            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+            .padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Text("Live card preview", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppCard(
+                app = app,
+                preferences = preferences,
+                favorite = false,
+                onClick = {},
+                onLongClick = {},
+                interactive = false,
+            )
+        }
         Text(
-            text = app.label,
-            color = Color.White,
-            fontSize = if (preferences.cardSize == CardSize.COMPACT) 12.sp else 14.sp,
-            fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            "${preferences.cardStyle.title} | ${preferences.cardShape.title} | ${preferences.cardColor.title} | ${preferences.cardShade.title}",
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 13.sp,
+        )
+        Text(
+            "Every choice updates this card immediately.",
+            color = Color.White.copy(alpha = 0.52f),
+            fontSize = 13.sp,
         )
     }
 }
@@ -1092,7 +1156,10 @@ private fun SettingsScreen(
         }
     }
     var pendingIconPackage by remember { mutableStateOf<String?>(null) }
-    BackHandler(onBack = onClose)
+    var showHomeHelperDisclosure by remember { mutableStateOf(false) }
+    BackHandler {
+        if (showHomeHelperDisclosure) showHomeHelperDisclosure = false else onClose()
+    }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         runCatching {
@@ -1149,7 +1216,11 @@ private fun SettingsScreen(
                         selected = homeHelperEnabled,
                         icon = Icons.Rounded.Home,
                     ) {
-                        openAccessibilitySettings(context)
+                        if (homeHelperEnabled) {
+                            openAccessibilitySettings(context)
+                        } else {
+                            showHomeHelperDisclosure = true
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -1166,10 +1237,16 @@ private fun SettingsScreen(
 
             SettingSection(
                 "App updates",
-                "Luma checks GitHub automatically. Android will still ask you to approve each installation.",
+                if (BuildConfig.IS_PLAY_STORE_BUILD) {
+                    "Google Play keeps this version current automatically."
+                } else {
+                    "Luma checks GitHub automatically. Android will still ask you to approve each installation."
+                },
             ) {
                 Text(
-                    if (updateInfo == null) {
+                    if (BuildConfig.IS_PLAY_STORE_BUILD) {
+                        "Installed version ${BuildConfig.VERSION_NAME} - managed by Google Play"
+                    } else if (updateInfo == null) {
                         "Installed version ${BuildConfig.VERSION_NAME}"
                     } else {
                         "Version ${updateInfo.versionName} is ready (installed: ${BuildConfig.VERSION_NAME})."
@@ -1180,14 +1257,24 @@ private fun SettingsScreen(
                 Spacer(Modifier.height(10.dp))
                 ChoiceRow {
                     SettingChoice(
-                        label = if (updateInfo == null) "Download newest version" else "Install ${updateInfo.versionName}",
-                        selected = updateInfo != null,
+                        label = if (BuildConfig.IS_PLAY_STORE_BUILD) {
+                            "Open Google Play"
+                        } else if (updateInfo == null) {
+                            "Download newest version"
+                        } else {
+                            "Install ${updateInfo.versionName}"
+                        },
+                        selected = !BuildConfig.IS_PLAY_STORE_BUILD && updateInfo != null,
                         icon = Icons.Rounded.SystemUpdateAlt,
                     ) {
-                        openWebUrl(
-                            context,
-                            updateInfo?.downloadUrl ?: UpdateRepository.STABLE_DOWNLOAD_URL,
-                        )
+                        if (BuildConfig.IS_PLAY_STORE_BUILD) {
+                            openPlayStorePage(context)
+                        } else {
+                            openWebUrl(
+                                context,
+                                updateInfo?.downloadUrl ?: UpdateRepository.STABLE_DOWNLOAD_URL,
+                            )
+                        }
                     }
                 }
             }
@@ -1209,35 +1296,58 @@ private fun SettingsScreen(
                 }
             }
 
-            SettingSection("App cards", "Mix a surface, shape, shade, color, and size.") {
-                SettingLabel("Surface")
-                ChoiceRow {
-                    CardStyle.entries.forEach { style ->
-                        SettingChoice(style.title, preferences.cardStyle == style) { preferences.updateCardStyle(style) }
+            SettingSection("App cards", "Preview the result here, then mix a surface, shape, shade, color, and size.") {
+                val previewApp = apps.firstOrNull { app ->
+                    app.packageName == "com.hulu.livingroomplus" || app.packageName == "com.google.android.youtube.tvunplugged"
+                } ?: apps.firstOrNull()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        SettingLabel("Card names")
+                        ChoiceRow {
+                            SettingChoice(
+                                label = if (preferences.showCardNames) "Names on" else "Names off",
+                                selected = preferences.showCardNames,
+                            ) {
+                                preferences.updateShowCardNames(!preferences.showCardNames)
+                            }
+                        }
+                        SettingLabel("Surface")
+                        ChoiceRow {
+                            CardStyle.entries.forEach { style ->
+                                SettingChoice(style.title, preferences.cardStyle == style) { preferences.updateCardStyle(style) }
+                            }
+                        }
+                        SettingLabel("Shape")
+                        ChoiceRow {
+                            CardShapeStyle.entries.forEach { shape ->
+                                SettingChoice(shape.title, preferences.cardShape == shape) { preferences.updateCardShape(shape) }
+                            }
+                        }
+                        SettingLabel("Background shade")
+                        ChoiceRow {
+                            CardShade.entries.forEach { shade ->
+                                SettingChoice(shade.title, preferences.cardShade == shade) { preferences.updateCardShade(shade) }
+                            }
+                        }
+                        SettingLabel("Color")
+                        ChoiceRow {
+                            CardColor.entries.forEach { color ->
+                                SettingChoice(color.title, preferences.cardColor == color) { preferences.updateCardColor(color) }
+                            }
+                        }
+                        SettingLabel("Size")
+                        ChoiceRow {
+                            CardSize.entries.forEach { size ->
+                                SettingChoice(size.title, preferences.cardSize == size) { preferences.updateCardSize(size) }
+                            }
+                        }
                     }
-                }
-                SettingLabel("Shape")
-                ChoiceRow {
-                    CardShapeStyle.entries.forEach { shape ->
-                        SettingChoice(shape.title, preferences.cardShape == shape) { preferences.updateCardShape(shape) }
-                    }
-                }
-                SettingLabel("Background shade")
-                ChoiceRow {
-                    CardShade.entries.forEach { shade ->
-                        SettingChoice(shade.title, preferences.cardShade == shade) { preferences.updateCardShade(shade) }
-                    }
-                }
-                SettingLabel("Color")
-                ChoiceRow {
-                    CardColor.entries.forEach { color ->
-                        SettingChoice(color.title, preferences.cardColor == color) { preferences.updateCardColor(color) }
-                    }
-                }
-                SettingLabel("Size")
-                ChoiceRow {
-                    CardSize.entries.forEach { size ->
-                        SettingChoice(size.title, preferences.cardSize == size) { preferences.updateCardSize(size) }
+                    if (previewApp != null) {
+                        AppCardSettingsPreview(previewApp, preferences)
                     }
                 }
             }
@@ -1342,6 +1452,70 @@ private fun SettingsScreen(
             }
 
             Spacer(Modifier.height(34.dp))
+        }
+
+        if (showHomeHelperDisclosure) {
+            HomeHelperDisclosure(
+                onCancel = { showHomeHelperDisclosure = false },
+                onContinue = {
+                    showHomeHelperDisclosure = false
+                    openAccessibilitySettings(context)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeHelperDisclosure(
+    onCancel: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xE600050A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(720.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xFF142234))
+                .border(2.dp, Color(0xFF72D5FF), RoundedCornerShape(26.dp))
+                .padding(30.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                "Before enabling the Home helper",
+                color = Color.White,
+                fontSize = 25.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Luma uses Android Accessibility only to detect when the stock Google TV Home screen appears, then reopen Luma. It receives the name of that Home app when the screen changes.",
+                color = Color.White.copy(alpha = 0.88f),
+                fontSize = 16.sp,
+            )
+            Text(
+                "Luma cannot read screen content, typed text, passwords, or personal information. It does not store, send, sell, or share Accessibility data.",
+                color = Color.White.copy(alpha = 0.72f),
+                fontSize = 15.sp,
+            )
+            Text(
+                "The helper is optional. If you continue, Android will open Accessibility so you can choose whether to enable it.",
+                color = Color.White.copy(alpha = 0.72f),
+                fontSize = 15.sp,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FocusButton("Not now", Icons.Rounded.Close, onCancel, requestInitialFocus = true)
+                Spacer(Modifier.width(12.dp))
+                FocusButton("I understand - continue", Icons.Rounded.Check, onContinue)
+            }
         }
     }
 }

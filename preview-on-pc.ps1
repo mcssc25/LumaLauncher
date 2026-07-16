@@ -4,7 +4,7 @@ $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 $emulator = Join-Path $sdk 'emulator\emulator.exe'
 $adb = Join-Path $sdk 'platform-tools\adb.exe'
 $avdHome = Join-Path $PSScriptRoot '.emulator'
-$apk = Join-Path $PSScriptRoot 'Luma-Launcher-v0.1-debug.apk'
+$apk = Join-Path $PSScriptRoot 'Luma-Launcher.apk'
 $device = 'emulator-5570'
 
 $env:ANDROID_HOME = $sdk

@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $adb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
-$apk = Join-Path $PSScriptRoot 'Luma-Launcher-v0.1-debug.apk'
+$apk = Join-Path $PSScriptRoot 'Luma-Launcher.apk'
 
 if (-not (Test-Path -LiteralPath $adb)) {
     throw 'Android platform tools were not found. Install Android Studio or Android platform-tools first.'

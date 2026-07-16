@@ -39,6 +39,23 @@ object CustomIconRepository {
             "downloader" in label || packageName == "com.esaba.downloader" -> R.drawable.custom_icon_downloader
             label == "play store" || label == "google play store" ||
                 packageName == "com.android.vending" -> R.drawable.custom_icon_play_store
+            label == "hulu" || packageName == "com.hulu.livingroomplus" ||
+                packageName == "com.hulu.plus" -> R.drawable.custom_icon_hulu
+            "speed test" in label || "speedtest" in label || packageName == "com.rma.speedtesttv" ||
+                "ookla" in packageName -> R.drawable.custom_icon_speed_test
+            label == "play games" || label == "google play games" ||
+                packageName == "com.google.android.play.games" -> R.drawable.custom_icon_play_games
+            label == "play movies & tv" || label == "google play movies & tv" ||
+                label == "google tv" || packageName == "com.google.android.videos" ->
+                R.drawable.custom_icon_play_movies
+            "surfshark" in label || packageName == "com.surfshark.vpnclient.android" ->
+                R.drawable.custom_icon_surfshark
+            "stremio" in label || packageName == "com.stremio.one" ||
+                packageName == "com.stremio.two" -> R.drawable.custom_icon_stremio
+            label == "youtube tv" || packageName == "com.google.android.youtube.tvunplugged" ->
+                R.drawable.custom_icon_youtube_tv
+            label == "spotify" || packageName == "com.spotify.tv.android" ||
+                packageName == "com.spotify.music" -> R.drawable.custom_icon_spotify
             else -> null
         }
     }

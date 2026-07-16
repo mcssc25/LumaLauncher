@@ -7,6 +7,7 @@
 .build-jdk/
 .build-gradle-home/
 local.properties
+keystore.properties
 **/build/
 captures/
 *.jks
