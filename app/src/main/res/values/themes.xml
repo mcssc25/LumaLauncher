@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.LumaLauncher" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#9CD7FF</item>
+        <item name="android:windowBackground">@color/launcher_background</item>
+        <item name="android:navigationBarColor">@color/launcher_background</item>
+    </style>
+</resources>
