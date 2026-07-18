@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Luma Launcher</string>
     <string name="home_helper_label">Luma Home screen helper</string>
-    <string name="home_helper_description">Keeps Luma open when the TV Home button would otherwise return to the stock Google TV launcher.</string>
+    <string name="home_helper_description">Recognizes the remote Home button and stock TV Home screen so the Home button returns to Luma. No Accessibility data is stored or shared.</string>
 </resources>

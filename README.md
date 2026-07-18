@@ -39,7 +39,7 @@ https://mcssc25.github.io/
 
 You can also open **Customize > Android TV home screen > Choose Luma as default Home**. Android controls this protected choice and requires the TV owner to approve it once. The **Android settings** button in Luma's top-right corner opens the TV's system settings.
 
-If the Google TV device ignores that Home choice, open **Customize > Android TV home screen > Enable Home helper**. In Accessibility, select **Luma Home screen helper** and enable it once. The helper only watches the stock TV launcher and returns the Home button to Luma.
+If the Google TV device ignores that Home choice, open **Customize > Android TV home screen > Enable Home helper**. In Accessibility, select **Luma Home screen helper** and enable it once. Version 0.4.1 recognizes the remote's Home key directly when the TV exposes it, with stock-launcher window detection as a fallback. Customize now shows whether the helper is actually connected, not merely switched on.
 
 ## Updates
 
