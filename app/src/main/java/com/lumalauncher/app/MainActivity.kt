@@ -506,6 +506,20 @@ private fun openDefaultHomeChooser(context: Context) {
     if (!opened) openAndroidSettings(context)
 }
 
+private fun isLumaDefaultHome(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager?.isRoleAvailable(RoleManager.ROLE_HOME) == true) {
+            return roleManager.isRoleHeld(RoleManager.ROLE_HOME)
+        }
+    }
+
+    val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+    return runCatching {
+        context.packageManager.resolveActivity(homeIntent, 0)?.activityInfo?.packageName == context.packageName
+    }.getOrDefault(false)
+}
+
 private fun openAccessibilitySettings(context: Context) {
     val opened = runCatching {
         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -1338,12 +1352,19 @@ private fun SettingsScreen(
     val installedIconPacks by produceState<List<IconPackInfo>>(emptyList()) {
         value = IconPackRepository.discover(context)
     }
-    val homeHelperEnabled by produceState(false) {
+    val homeHelperStatus by produceState(HomeHelperStatus.OFF) {
         while (true) {
-            value = LumaHomeAccessibilityService.isEnabled(context)
+            value = LumaHomeAccessibilityService.status(context)
             delay(1_000)
         }
     }
+    val lumaIsDefaultHome by produceState(false) {
+        while (true) {
+            value = isLumaDefaultHome(context)
+            delay(1_000)
+        }
+    }
+    val homeHelperEnabled = homeHelperStatus != HomeHelperStatus.OFF
     var pendingIconPackage by remember { mutableStateOf<String?>(null) }
     var showHomeHelperDisclosure by remember { mutableStateOf(false) }
     BackHandler {
@@ -1394,15 +1415,20 @@ private fun SettingsScreen(
                 "Choose Luma as Home. The optional helper keeps Luma open on Google TV devices that ignore that choice.",
             ) {
                 ChoiceRow {
-                    SettingChoice("Choose Luma as default Home", false, icon = Icons.Rounded.Home) {
+                    SettingChoice(
+                        if (lumaIsDefaultHome) "Luma is the default Home" else "Choose Luma as default Home",
+                        lumaIsDefaultHome,
+                        icon = Icons.Rounded.Home,
+                    ) {
                         openDefaultHomeChooser(context)
                     }
-                    SettingChoice("Open Android settings", false, icon = Icons.Rounded.Settings) {
-                        openAndroidSettings(context)
-                    }
                     SettingChoice(
-                        label = if (homeHelperEnabled) "Home helper is on" else "Enable Home helper",
-                        selected = homeHelperEnabled,
+                        label = when (homeHelperStatus) {
+                            HomeHelperStatus.CONNECTED -> "Home helper is connected"
+                            HomeHelperStatus.ENABLED_NOT_CONNECTED -> "Repair Home helper"
+                            HomeHelperStatus.OFF -> "Enable Home helper"
+                        },
+                        selected = homeHelperStatus == HomeHelperStatus.CONNECTED,
                         icon = Icons.Rounded.Home,
                     ) {
                         if (homeHelperEnabled) {
@@ -1411,13 +1437,22 @@ private fun SettingsScreen(
                             showHomeHelperDisclosure = true
                         }
                     }
+                    SettingChoice("Open Android settings", false, icon = Icons.Rounded.Settings) {
+                        openAndroidSettings(context)
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    if (homeHelperEnabled) {
-                        "Luma Home screen helper is enabled. The Home button should return to Luma."
-                    } else {
-                        "In Accessibility, select ‘Luma Home screen helper’ and turn it on once."
+                    when (homeHelperStatus) {
+                        HomeHelperStatus.CONNECTED -> if (lumaIsDefaultHome) {
+                            "Best protection is active: Luma is the default Home and the helper is connected."
+                        } else {
+                            "The helper is connected. Choosing Luma as default Home above adds another layer of protection."
+                        }
+                        HomeHelperStatus.ENABLED_NOT_CONNECTED ->
+                            "Android shows the helper as enabled, but it is not connected. Open it above, turn it off, then on again."
+                        HomeHelperStatus.OFF ->
+                            "In Accessibility, select ‘Luma Home screen helper’ and turn it on once."
                     },
                     color = Color.White.copy(alpha = 0.62f),
                     fontSize = 13.sp,
@@ -1949,12 +1984,12 @@ private fun HomeHelperDisclosure(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Luma uses Android Accessibility only to detect when the stock Google TV Home screen appears, then reopen Luma. It receives the name of that Home app when the screen changes.",
+                "Luma uses Android Accessibility only to recognize the remote's Home button and when the stock Google TV Home screen appears, then reopen Luma. It receives remote key codes and the name of the app whose window is opening; only the Home key and stock Home apps trigger an action.",
                 color = Color.White.copy(alpha = 0.88f),
                 fontSize = 16.sp,
             )
             Text(
-                "Luma cannot read screen content, typed text, passwords, or personal information. It does not store, send, sell, or share Accessibility data.",
+                "Luma cannot read screen content, typed text, passwords, or personal information. It does not store, send, sell, or share key codes, app names, or any other Accessibility data.",
                 color = Color.White.copy(alpha = 0.72f),
                 fontSize = 15.sp,
             )

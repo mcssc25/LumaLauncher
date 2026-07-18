@@ -36,6 +36,13 @@ Luma has no ads and does not require an account. Your favorites, artwork choices
 
 The optional Home screen helper uses Android Accessibility only to detect when the stock TV Home screen appears and return you to Luma. It cannot read screen content or typed text, and it does not collect or share Accessibility data.
 
+## Release notes - 0.4.1
+
+- Made the Home helper more reliable on Google TV devices
+- Added direct remote Home-key handling with a stock-launcher fallback
+- Added a clear helper status showing whether it is actually connected
+- Added a default Home status so users can confirm both layers are active
+
 ## Release notes - 0.4.0
 
 - Added a next-song music control and default music app setting
